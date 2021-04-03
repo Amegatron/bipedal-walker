@@ -9,4 +9,5 @@ slightly decays until it becomes 0.1. After that, it is set back to 0.2, and so 
 Current implementation has only the learning mode. It also does not yet save any progress.
 
 Here is what the bot could achieve after continuous learning:
+
 ![](bipedal-1.gif)
