@@ -1,0 +1,32 @@
+###
+# Epsilon mode:
+#   0 - decayed
+#   1 - static
+#   2 - zero
+GET http://localhost:8123/?action=epsilon_mode&value=1
+
+###
+# Set epsilon_max
+GET http://localhost:8123/?action=epsilon_max&value=0.16
+
+###
+# Set epsilon_min
+GET http://localhost:8123/?action=epsilon_min&value=0.08
+
+###
+# Set epsilon
+GET http://localhost:8123/?action=epsilon&value=0.2
+
+###
+# Set epsilon_decay
+GET http://localhost:8123/?action=epsilon_decay&value=0.993
+
+###
+# Render ON/OFF
+#   0 - OFF
+#   1 - ON
+GET http://localhost:8123/?action=render&value=1
+
+###
+# Learning mode ON/OFF
+GET http://localhost:8123/?action=learn&value=1
