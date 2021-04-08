@@ -158,6 +158,7 @@ def save_networks(key):
     critic.save_weights('./saves/critic_' + key)
     critic_target.save_weights('./saves/critic_target_' + key)
 
+
 def load_networks(key):
     actor.load_weights('./saves/actor_' + key)
     actor_target.load_weights('./saves/actor_target_' + key)
@@ -179,8 +180,12 @@ actor_target = ActorNetwork()
 critic = CriticNetwork()
 critic_target = CriticNetwork()
 
+#
+# Either load or transfer
+#
 # transfer_networks(1)
 load_networks('2088_263.56')
+
 
 gamma = 0.99  # Discount coefficient
 max_timesteps = 2000
@@ -271,9 +276,8 @@ while True:
 
             if average_result > maximum_average_reward:
                 print("New average record!", average_result)
-                if average_result > 0:
-                    # save_networks(str(episode) + '_' + str(round(average_result, 2)))
-                    pass
+                if average_result > 0 and learning:
+                    save_networks(str(episode) + '_' + str(round(average_result, 2)))
 
                 maximum_average_reward = average_result
 
@@ -281,9 +285,8 @@ while True:
                 print("Average reward: ", average_result, ". ", episode, " episodes have passed so far")
                 print("Epsilon: ", epsilon)
 
-            if episode % 100 == 0 and episode > 300:
-                # save_networks(str(episode))
-                pass
+            if episode % 100 == 0 and episode > 300 and learning:
+                save_networks(str(episode))
 
             if episode_reward >= 300:
                 print("Solved!!!!!")
