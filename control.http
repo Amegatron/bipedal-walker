@@ -7,19 +7,19 @@ GET http://localhost:8123/?action=epsilon_mode&value=1
 
 ###
 # Set epsilon_max
-GET http://localhost:8123/?action=epsilon_max&value=0.16
+GET http://localhost:8123/?action=epsilon_max&value=0.1
 
 ###
 # Set epsilon_min
-GET http://localhost:8123/?action=epsilon_min&value=0.08
+GET http://localhost:8123/?action=epsilon_min&value=0.02
 
 ###
 # Set epsilon
-GET http://localhost:8123/?action=epsilon&value=0.2
+GET http://localhost:8123/?action=epsilon&value=0.08
 
 ###
 # Set epsilon_decay
-GET http://localhost:8123/?action=epsilon_decay&value=0.993
+GET http://localhost:8123/?action=epsilon_decay&value=0.995
 
 ###
 # Render ON/OFF
@@ -30,3 +30,7 @@ GET http://localhost:8123/?action=render&value=1
 ###
 # Learning mode ON/OFF
 GET http://localhost:8123/?action=learn&value=1
+
+###
+# Print errors ON/OFF
+GET http://localhost:8123/?action=errors&value=0

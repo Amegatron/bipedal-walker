@@ -19,7 +19,7 @@ class ServerThread(th.Thread):
 class MyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global epsilon, epsilon_mode, epsilon_max, epsilon_min, \
-            do_render, learning, epsilon_decay
+            do_render, learning, epsilon_decay, print_errors
 
         parts = urllib.parse.parse_qs(self.path[2:])
         if parts['action'][0] == 'epsilon':
@@ -53,7 +53,17 @@ class MyHandler(BaseHTTPRequestHandler):
                 learning = False
 
             print("Learning set to", learning)
-
+        elif parts['action'][0] == 'errors':
+            val = int(parts['value'][0])
+            if val == 1:
+                print_errors = True
+            else:
+                print_errors = False
+            print("print_errors set to", print_errors)
+        elif parts['action'][0] == 'save':
+            val = parts['value'][0]
+            save_networks(val)
+            print("Network saved")
 
         return
 
@@ -63,7 +73,7 @@ class StateLayer(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.surface_input = tf.keras.layers.Conv1D(3, 3, 1, input_shape=(None, 10, 1), activation="relu")
         self.surface_combined = tf.keras.layers.MaxPool1D(2)
-        self.robot_input = tf.keras.layers.Dense(20, activation="relu")
+        self.robot_input = tf.keras.layers.Dense(40, activation="relu")
 
     def call(self, inputs, **kwargs):
         robot_inputs, surface_inputs = tf.split(inputs, [14, 10], 1)
@@ -80,8 +90,8 @@ class ActorNetwork(tf.keras.Model):
         super().__init__()
 
         self.layer0 = StateLayer()
-        self.layer1 = tf.keras.layers.Dense(300, activation="relu", dtype=tf.float32)
-        self.layer2 = tf.keras.layers.Dense(200, activation="relu", dtype=tf.float32)
+        self.layer1 = tf.keras.layers.Dense(400, activation="relu", dtype=tf.float32)
+        self.layer2 = tf.keras.layers.Dense(300, activation="relu", dtype=tf.float32)
         self.output_layer = tf.keras.layers.Dense(4, activation="tanh", dtype=tf.float32)
         self.optimizer = tf.optimizers.Adam(learning_rate)
 
@@ -95,8 +105,8 @@ class CriticNetwork(tf.keras.Model):
 
         self.learning_rate = learning_rate
         self.state_layer = StateLayer()
-        self.layer1 = tf.keras.layers.Dense(300, activation="relu", dtype=tf.float32)
-        self.layer2 = tf.keras.layers.Dense(200, activation="relu", dtype=tf.float32)
+        self.layer1 = tf.keras.layers.Dense(400, activation="relu", dtype=tf.float32)
+        self.layer2 = tf.keras.layers.Dense(300, activation="relu", dtype=tf.float32)
         self.output_layer = tf.keras.layers.Dense(1, activation="linear", dtype=tf.float32)
         self.optimizer = tf.optimizers.Adam(learning_rate)
 
@@ -137,6 +147,8 @@ def train(states, actions, rewards, next_states, dones):
     gradients = tape.gradient(loss, actor.trainable_variables)
     actor.optimizer.apply_gradients(zip(gradients, actor.trainable_variables))
 
+    return loss
+
 
 def soft_copy_weights(source_model, target_model, tau=0.003):
     source_weights = source_model.get_weights()
@@ -147,7 +159,7 @@ def soft_copy_weights(source_model, target_model, tau=0.003):
     target_model.set_weights(weights)
 
 
-def transfer_networks(tau=0.003):
+def transfer_networks(tau=0.05):
     soft_copy_weights(actor, actor_target, tau)
     soft_copy_weights(critic, critic_target, tau)
 
@@ -172,7 +184,7 @@ server_thread.start()
 # 0 - dynamic, 1 - static, 2 - 0
 epsilon_mode = 0
 do_render = True
-learning = False
+learning = True
 
 env = gym.make("BipedalWalker-v3")
 actor = ActorNetwork()
@@ -183,8 +195,8 @@ critic_target = CriticNetwork()
 #
 # Either load or transfer
 #
-# transfer_networks(1)
-load_networks('2088_263.56')
+transfer_networks(1)
+# load_networks('3372_259.06')
 
 
 gamma = 0.99  # Discount coefficient
@@ -196,7 +208,8 @@ log_episodes_every = 5
 replay_buffer = deque(maxlen=500000)
 epsilon_max = 0.2
 epsilon = epsilon_max
-epsilon_decay = 0.993
+epsilon_decay = 0.994
+epsilon_cycle_decay = 0.8
 epsilon_min = 0.1
 
 episode = 0
@@ -204,10 +217,19 @@ rewards_history = []
 maximum_average_reward = -1000
 average_result = -1000
 maximum_reward = -1000
+print_errors = False
+episode_reward = 0
 
 while True:
     episode += 1
     state = env.reset()
+
+    f = open("output.txt", "w")
+    f.write("Episode: " + str(episode)
+            + "; Last reward: " + str(round(episode_reward, 2))
+            + "; Noise: " + str(round(epsilon, 2)))
+    f.close()
+
     episode_reward = 0
 
     for step in range(max_timesteps):
@@ -223,9 +245,10 @@ while True:
 
         next_state, reward, done, _ = env.step(action)
 
-        replay_buffer.append(
-            (state.astype("float32"), action, float(reward), next_state.astype("float32"), float(done))
-        )
+        if learning:
+            replay_buffer.append(
+                (state.astype("float32"), action, float(reward), next_state.astype("float32"), float(done))
+            )
         state = next_state
 
         episode_reward += reward
@@ -246,13 +269,16 @@ while True:
             next_states = tf.convert_to_tensor(samplesReshaped[3])
             dones = tf.convert_to_tensor(samplesReshaped[4])
 
-            train(
+            loss = train(
                 states,
                 actions,
                 rewards,
                 next_states,
                 dones
             )
+
+            if print_errors:
+                print(loss.numpy())
 
             transfer_networks()
 
@@ -264,11 +290,13 @@ while True:
             if epsilon_mode == 0:
                 epsilon *= epsilon_decay
                 if epsilon < epsilon_min:
+                    epsilon_max *= epsilon_cycle_decay
+                    epsilon_min *= epsilon_cycle_decay
                     epsilon = epsilon_max
 
             rewards_history.append(episode_reward)
-            if len(rewards_history) >= 10:
-                average_result = np.mean(rewards_history[-10:])
+            if len(rewards_history) >= 5:
+                average_result = np.mean(rewards_history[-5:])
 
             if episode_reward > maximum_reward:
                 maximum_reward = episode_reward
@@ -288,7 +316,14 @@ while True:
             if episode % 100 == 0 and episode > 300 and learning:
                 save_networks(str(episode))
 
-            if episode_reward >= 300:
+            if episode_reward >= 270 and learning:
+                do_render = True
+                transfer_networks(1)
+                save_networks('solved')
+                f = open("solved.txt", "w")
+                f.write("! SOLVED !")
+                f.close()
                 print("Solved!!!!!")
+                learning = False
 
             break
